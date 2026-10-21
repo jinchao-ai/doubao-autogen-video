@@ -1,0 +1,76 @@
+# doubao-autogen-video 配置示例
+# 使用：复制为 config.yaml 后按需修改
+# 选择器集中管理：豆包改版只需更新此处（实测记录见 DESIGN.md §0.5）
+
+server:
+  host: 127.0.0.1
+  port: 8000
+
+accounts:
+  - name: main
+    user_data_dir: ./profiles/main
+    headless: false           # M2 实测：headless 发送后 session 被服务端作废，
+                              # 改有头真窗口跑在桌面（:0）上，自动化指纹最小
+    # 额度保护：保守硬上限（用户要求保额度，宁可少跑不可测光）。
+    # 真实额度未知（M2 首次 I2V 显示"消耗 0"，口径待 M4 观察），先按小值保护，
+    # 每天只用到这里就停，绝不超出。
+    daily_quota_t2i: 10
+    daily_quota_i2v: 5
+  # 多账号：复制上面结构，name/user_data_dir 不同；首次登录各登一次
+  # - name: backup
+  #   user_data_dir: ./profiles/backup
+  #   headless: true
+  #   daily_quota_t2i: 60
+  #   daily_quota_i2v: 20
+
+daily_reset_hour: 0        # 次日几点视为额度重置
+daily_reset_jitter_min: 5
+
+throttle:
+  min_delay_sec: 120        # 每镜间随机延迟下限（保额度：拉大节奏，避免高频触发风控/额度）
+  max_delay_sec: 300
+  poll_interval_sec: 5
+  image_timeout_sec: 300
+  video_timeout_sec: 900   # 工作台 agent 先出方案等确认（约1-3分钟），再后台生成视频
+  rate_limit_cooldown_min: 20
+
+paths:
+  state_dir: ./state
+  download_dir: ./downloads
+  assets_registry: ./assets.json   # 资产注册表（CDN URL 跨集复用）
+  queue_file: ./queue.json
+
+# 风格块（示例）：逐字锁定，LLM 扩写时原样拼接，禁止改写
+style_blocks:
+  shangmei: "上海美术电影制片厂经典手绘动画风格，手绘墨线勾边，敦煌壁画矿物重彩，青瓷绿、朱砂红、鎏金、墨黑、石青、绛紫色调。"
+
+# 违禁词（实证示例）：入队前扫描 prompt，命中拒绝。按自己项目实测增删
+banned_words: [夜叉, 母夜叉, 跪, 伏坐, 笔直, 挺拔, 身姿, 阴影]
+
+# 额度/风控信号正则（扫描页面尾部文案分类）
+quota_signals:
+  rate_limited: ["操作过于频繁", "请稍后再试", "稍后重试", "频繁"]
+  quota_exhausted: ["今日.{0,6}额度", "额度已用完", "达到上限", "次数上限", "已用完"]
+  login_expired: ["扫码登录", "手机号登录"]
+
+# DOM 选择器（M2 实测钉死，2026-10-19；哈希后缀一律用前缀匹配）
+# 布局说明：headless profile 落在「豆包工作」工作台布局（服务端灰度，chip 禁用不可切回）。
+# 工作台无 upload-file-input / 模式按钮；附件唯一通道 = drop 事件到 file_drop_area。
+selectors:
+  editor: '[contenteditable=true]'
+  drop_area: '[data-testid=file_drop_area]'      # M2 实测：drop 事件唯一可行附件通道
+  attachment_card: '[data-testid=attachment-image-card]'  # 附件预览卡片（挂载校验）
+  upload_input: '[data-testid=upload-file-input]'         # 仅经典布局存在，保留兼容
+  image_wrapper: '[class*=image-wrapper]'
+  gen_image: 'img[src*="rc_gen_image"]'          # 生成图（cthumb 为缩略图，需过滤）
+  gen_image_thumb_filter: 'cthumb'
+  video_player: '[class*=video-player] video'    # xgplayer 容器，取 currentSrc
+  send_button_candidates:                        # 按序尝试（工作台实测第一项命中）
+    - '[data-testid="chat_input_send_button"]'
+    - '[data-testid="send-button"]'
+    - 'button[data-testid*="send"]'
+    - 'button:has-text("发送")'
+  mode_image: 'button:has-text("图像生成")'      # 仅经典布局存在
+  mode_video: 'button:has-text("视频生成")'
+
+human_review: none         # none=全自动 | per_episode=集末拼图人工过审

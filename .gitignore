@@ -1,0 +1,8 @@
+profiles/
+state/
+downloads/
+logs/
+*.log
+__pycache__/
+*.pyc
+*.png
